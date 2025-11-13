@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>AR Hand Tracking</title>
+		<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👋</text></svg>" />
+		<style>
+			body {
+				margin: 0;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				background-color: #222;
+				overflow: hidden;
+			}
+
+			/* 用于显示摄像头输入的视频元素 */
+			#video-feed {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				transform: scaleX(-1); /* 镜像，更符合自拍视角 */
+			}
+
+			/* 用于覆盖在视频上方的 AR 渲染区域 */
+			#overlay-canvas {
+				position: absolute;
+				top: 0;
+				left: 0;
+				transform: scaleX(-1); /* 保持与视频一致的镜像 */
+			}
+
+			/* 提示信息 */
+			#loading {
+				color: white;
+				font-size: 24px;
+				z-index: 10;
+			}
+		</style>
+		<script type="importmap">
+			{
+				"imports": {
+					"@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs"
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<div id="loading">正在加载模型，请稍候...</div>
+		<video id="video-feed" autoplay playsinline></video>
+		<canvas id="overlay-canvas"></canvas>
+
+		<script type="module">
+			import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
+
+			const video = document.getElementById("video-feed");
+			const canvas = document.getElementById("overlay-canvas");
+			const ctx = canvas.getContext("2d");
+			const loadingText = document.getElementById("loading");
+
+			// MediaPipe 相关变量
+			let handLandmarker;
+			let lastVideoTime = -1;
+			let runningMode = "VIDEO";
+
+			// AR 文本逻辑相关变量
+			const TARGET_WORD = "COOKING";
+			let renderedLetters = {}; // 存储已渲染的字母: { 'C': {x: 100, y: 200, drawn: true}, ... }
+			let nextLetterIndex = 0;
+			const TRIGGER_ZONES = [
+				{ name: "C", xMin: 0.1, xMax: 0.3 }, // 左侧区域
+				{ name: "O1", xMin: 0.3, xMax: 0.5 }, // 左中区域
+				{ name: "O2", xMin: 0.5, xMax: 0.7 }, // 右中区域
+				// 更多字母...
+			];
+
+			/**
+			 * 初始化 MediaPipe HandLandmarker 模型
+			 */
+			async function createHandLandmarker() {
+				try {
+					const vision = await FilesetResolver.forVisionTasks(
+						"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+					);
+					handLandmarker = await HandLandmarker.createFromOptions(vision, {
+						baseOptions: {
+							modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+							delegate: "GPU",
+						},
+						runningMode: runningMode,
+						numHands: 1,
+					});
+
+					loadingText.style.display = "none";
+					setupCamera();
+				} catch (error) {
+					console.error("模型加载失败:", error);
+					loadingText.textContent = "模型加载失败: " + error.message;
+				}
+			}
+
+			/**
+			 * 设置摄像头并开始视频流
+			 */
+			function setupCamera() {
+				navigator.mediaDevices
+					.getUserMedia({ video: true })
+					.then((stream) => {
+						video.srcObject = stream;
+						video.addEventListener("loadeddata", () => {
+							// 设置画布尺寸与视频流一致
+							canvas.width = video.videoWidth;
+							canvas.height = video.videoHeight;
+							video.play();
+							requestAnimationFrame(predictLoop); // 开始预测循环
+						});
+					})
+					.catch((err) => {
+						console.error("无法获取摄像头: ", err);
+						loadingText.textContent = "无法获取摄像头权限。";
+					});
+			}
+
+			/**
+			 * 实时预测和 AR 渲染循环
+			 */
+			function predictLoop() {
+				if (runningMode === "VIDEO" && handLandmarker) {
+					let startTimeMs = performance.now();
+					if (lastVideoTime !== video.currentTime) {
+						// 进行手部姿态预测
+						const results = handLandmarker.detectForVideo(video, startTimeMs);
+						lastVideoTime = video.currentTime;
+
+						ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+						if (results.handLandmarks && results.handLandmarks.length > 0) {
+							const landmarks = results.handLandmarks[0];
+							// 获取手部中心点 (以食指指尖为例，索引 8)
+							const indexFingerTip = landmarks[8];
+
+							// 将标准化坐标 (0~1) 转换为像素坐标
+							const xPixel = indexFingerTip.x * canvas.width;
+							const yPixel = indexFingerTip.y * canvas.height;
+
+							// 绘制一个点作为手的标记
+							drawHandMarker(xPixel, yPixel);
+
+							// 执行 AR 文本生成逻辑
+							processARLogic(xPixel, yPixel);
+						}
+					}
+				}
+				requestAnimationFrame(predictLoop);
+			}
+
+			/**
+			 * 绘制手部标记 (代替视频中的 C 形物体)
+			 */
+			function drawHandMarker(x, y) {
+				ctx.beginPath();
+				ctx.arc(x, y, 10, 0, 2 * Math.PI);
+				ctx.fillStyle = "red"; // 红色标记手的位置
+				ctx.fill();
+				ctx.closePath();
+			}
+
+			/**
+			 * AR 文本生成核心逻辑
+			 */
+			function processARLogic(handX, handY) {
+				const nextLetter = TARGET_WORD[nextLetterIndex];
+
+				if (!nextLetter) {
+					// 单词已完成，只需重新绘制已有的字母
+					redrawLetters();
+					return;
+				}
+
+				// 检查是否达到触发条件 (简化为手部在屏幕的左侧/中间/右侧触发)
+				// 注意：在实际应用中，您会根据 YOLO 的输出坐标和手势来定义更复杂的逻辑
+
+				// 简化触发逻辑：只要手出现在屏幕的左半部分，就写下一个字母
+				const triggerCondition = handX < canvas.width / 2;
+
+				if (triggerCondition && !renderedLetters[nextLetter]) {
+					// 触发新的字母生成
+
+					// 字母的位置应放在当前手部附近，但稍微偏上，并固定下来
+					const fixedX = handX;
+					const fixedY = handY - 100; // 稍微抬高一点
+
+					// 存储字母及其位置
+					renderedLetters[nextLetter] = {
+						x: fixedX,
+						y: fixedY,
+						text: nextLetter,
+					};
+
+					// 准备下一个字母
+					nextLetterIndex++;
+				}
+
+				redrawLetters();
+			}
+
+			/**
+			 * 重新绘制所有已生成的字母
+			 */
+			function redrawLetters() {
+				ctx.font = "bold 80px Arial";
+				ctx.fillStyle = "white";
+				ctx.textAlign = "center";
+
+				Object.values(renderedLetters).forEach((letter) => {
+					// 视频中的文字是横向排列的，我们根据顺序重新计算它们的位置，使其整齐
+					const order = TARGET_WORD.indexOf(letter.text);
+
+					if (order >= 0) {
+						// 将所有字母排布在一个中心线上
+						const textCenterY = canvas.height / 2;
+						// 文本起始 X 位置 + 偏移量
+						const textStartX = canvas.width / 2 - (TARGET_WORD.length * 40) / 2; // 假设每个字母宽度约 40px
+						const currentX = textStartX + order * 80; // 间距 80px
+
+						ctx.fillText(letter.text, currentX, textCenterY);
+					}
+				});
+			}
+
+			// 启动程序
+			createHandLandmarker();
+		</script>
+	</body>
+</html>
