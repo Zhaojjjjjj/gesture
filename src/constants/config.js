@@ -14,7 +14,7 @@ export const MEDIAPIPE_CONFIG = {
  * AR 文本配置
  */
 export const AR_CONFIG = {
-	TARGET_WORD: "Hello World",
+	TARGET_WORD: "Hi",
 	FONT: "bold 80px Arial",
 	FONT_COLOR: "purple",
 	LETTER_SPACING: 50,
