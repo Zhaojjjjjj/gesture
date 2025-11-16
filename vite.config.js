@@ -12,6 +12,13 @@ export default defineConfig({
   server: {
     https: false, // 如果需要 HTTPS 访问摄像头，可以设置为 true
     port: 3000,
-    open: true
+    open: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
+  },
+  optimizeDeps: {
+    exclude: ['@mediapipe/tasks-vision']
   }
 })
