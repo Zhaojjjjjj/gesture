@@ -7,7 +7,7 @@ import { MEDIAPIPE_CONFIG, HAND_MARKER_CONFIG } from "../constants/config";
  */
 export function useHandTracking() {
 	const isLoading = ref(true);
-	const loadingMessage = ref("正在加载模型,请稍候...");
+	const loadingMessage = ref("Loading model, please wait...");
 	const handLandmarker = ref(null);
 	const lastVideoTime = ref(-1);
 	const isInitialized = ref(false);
