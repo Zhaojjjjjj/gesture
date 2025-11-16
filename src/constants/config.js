@@ -14,7 +14,7 @@ export const MEDIAPIPE_CONFIG = {
  * AR 文本配置
  */
 export const AR_CONFIG = {
-	TARGET_WORD: "Hi Jacob",
+	TARGET_WORD: "Hello World",
 	FONT: "bold 80px Arial",
 	FONT_COLOR: "purple",
 	LETTER_SPACING: 50,
@@ -50,26 +50,43 @@ export const HAND_SKELETON_CONFIG = {
 	POINT_RADIUS: 4,
 	POINT_COLOR: "#00BFFF", // 蓝色
 	POINT_FILL: true,
-	
+
 	// 连接线样式
 	LINE_COLOR: "#FFFFFF", // 白色
 	LINE_WIDTH: 2,
-	
+
 	// MediaPipe Hand Landmarks 连接关系（21个关键点）
 	CONNECTIONS: [
 		// 拇指
-		[0, 1], [1, 2], [2, 3], [3, 4],
+		[0, 1],
+		[1, 2],
+		[2, 3],
+		[3, 4],
 		// 食指
-		[0, 5], [5, 6], [6, 7], [7, 8],
+		[0, 5],
+		[5, 6],
+		[6, 7],
+		[7, 8],
 		// 中指
-		[0, 9], [9, 10], [10, 11], [11, 12],
+		[0, 9],
+		[9, 10],
+		[10, 11],
+		[11, 12],
 		// 无名指
-		[0, 13], [13, 14], [14, 15], [15, 16],
+		[0, 13],
+		[13, 14],
+		[14, 15],
+		[15, 16],
 		// 小指
-		[0, 17], [17, 18], [18, 19], [19, 20],
+		[0, 17],
+		[17, 18],
+		[18, 19],
+		[19, 20],
 		// 手掌底部连接
-		[5, 9], [9, 13], [13, 17]
-	]
+		[5, 9],
+		[9, 13],
+		[13, 17],
+	],
 };
 
 /**
